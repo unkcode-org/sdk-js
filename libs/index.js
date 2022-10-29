@@ -1,3 +1,5 @@
+"use strict";
+
 import axios from "axios";
 import cryptoJs from "crypto-js";
 import utf8 from "crypto-js/enc-utf8.js";
@@ -18,9 +20,10 @@ function UNKApp({ name, secretKey, verifyLicense, verificationFail }) {
  * Initialize UNKCode app
  *
  * @param {Object} config Array with app configuration
- * @param {Object} config.name The app name as it appears on https://unkcode.com/panel/dev/applications
- * @param {Object} config.secretKey The app secret key
- * @param {Object} config.verificationFail Callback that will be executed on license verifiaction fail
+ * @param {string} config.name The app name as it appears on https://unkcode.com/panel/dev/applications
+ * @param {string} config.secretKey The app secret key
+ * @param {boolean} config.verifyLicense Bool which indicates if application will run a verification routine to have knowledge about the license status when a user is logged
+ * @param {function} config.verificationFail Callback that will be executed on license verifiaction fail
  * @returns {UNKApp} Object to access sdk functions.
  */
 
@@ -34,8 +37,8 @@ export const initializeApplication = ({ name, secretKey, verifyLicense, verifica
  * Signin user to app using UNKCode's lincese and if required the macAdress
  *
  * @param {Object} config Array with needed data to login
- * @param {Object} config.license The user license
- * @param {Object} config.macAddress The user macAdress. Only in case that app config requires it
+ * @param {string} config.license The user license
+ * @param {string} config.macAddress The user macAdress. Only in case that app config requires it
  * @returns {boolean} bool value of success
  */
 async function loginWithLicense({ license, macAddress = undefined }) {
@@ -83,7 +86,9 @@ async function loginWithLicense({ license, macAddress = undefined }) {
 		return false;
 	}
 
-	createVerificationRutine(license, macAddress, this.failCb);
+	if (this.verify) {
+		createVerificationRutine(license, macAddress, this.failCb);
+	}
 	return true;
 }
 
