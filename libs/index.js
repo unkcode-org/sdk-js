@@ -4,16 +4,16 @@ import axios from "axios";
 import cryptoJs from "crypto-js";
 import utf8 from "crypto-js/enc-utf8.js";
 import Base64 from "crypto-js/enc-base64.js";
-import { getUnixTime } from "./modules/time.js";
 
 const { MD5 } = cryptoJs;
 
-function UNKApp({ name, secretKey, verifyLicense, verificationFail }) {
+function AppInterface({ name, secretKey, verifyLicense, verificationFail }) {
 	this.name = name;
-	this.token = MD5(secretKey);
+	this.token = secretKey;
 	this.login = loginWithLicense;
-	this.verify = verifyLicense;
-	this.failCb = verificationFail;
+
+	this.regularVerification = verifyLicense;
+	this.failedVerificationCallback = verificationFail;
 }
 
 /**
@@ -21,16 +21,16 @@ function UNKApp({ name, secretKey, verifyLicense, verificationFail }) {
  *
  * @param {Object} config Array with app configuration
  * @param {string} config.name The app name as it appears on https://unkcode.com/panel/dev/applications
- * @param {string} config.secretKey The app secret key
- * @param {boolean} config.verifyLicense Bool which indicates if application will run a verification routine to have knowledge about the license status when a user is logged
+ * @param {string} config.secretKey Application secret key retrieved by unkcode
+ * @param {boolean} config.verifyLicense Run a verification routine to have knowledge about the license status when a user is logged (disabled by default)
  * @param {function} config.verificationFail Callback that will be executed on license verifiaction fail
- * @returns {UNKApp} Object to access sdk functions.
+ * @returns {AppInterface} Object to access sdk functions.
  */
 
-export const initializeApplication = ({ name, secretKey, verifyLicense, verificationFail }) => {
-	if (!name || !secretKey || !verifyLicense || !verificationFail) throw new Error("[UNKCode][ERROR] All fields must be completed to initilize the application.");
+export const UNKCode = ({ name, secretKey, verifyLicense = false, verificationFail }) => {
+	if (!name || !secretKey || !verificationFail) throw new Error("[-] All fields must be completed to initilize unkcode application interface.");
 
-	return new UNKApp({ name: name, secretKey: secretKey, verifyLicense: verifyLicense, verificationFail: verificationFail });
+	return new AppInterface({ name: name, secretKey: secretKey, verifyLicense: verifyLicense, verificationFail: verificationFail });
 };
 
 /**
@@ -42,53 +42,56 @@ export const initializeApplication = ({ name, secretKey, verifyLicense, verifica
  * @returns {boolean} bool value of success
  */
 async function loginWithLicense({ license, macAddress = undefined }) {
-	const powRes = await axios({
-		url: `https://unkcode.com/api/v1/verify/pow/${this.name}`,
+	const authRes = await axios({
+		url: `https://unkcode.com/api/v1/verify/${this.name}`,
 		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		data: JSON.stringify({
+			data: Base64.stringify(
+				utf8.parse(
+					JSON.stringify({
+						auth: MD5(this.token),
+					})
+				)
+			),
+		}),
 	}).catch(() => {
 		return false;
 	});
 
-	if (!powRes.data.message.includes("SUCN")) {
+	//console.log(authRes.data);
+
+	if (!authRes.data.message.includes("SUCN")) {
 		return false;
 	}
 
-	let powKey = powRes.data.otherData + MD5(license + this.token).toString();
+	//console.log(authRes.data.token);
 
-	let json = {
-		token: powKey,
+	let verifyBodyParms = {
+		token: authRes.data.token,
 	};
 
 	if (macAddress) {
-		json.macHash = MD5(macAddress).toString();
+		verifyBodyParms.macHash = MD5(macAddress).toString();
 	}
-
-	json = JSON.stringify(json);
 
 	const { data } = await axios({
 		url: `https://unkcode.com/api/v1/verify/${this.name}/${license}`,
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
-		data: JSON.stringify({ data: Base64.stringify(utf8.parse(json)) }),
+		data: JSON.stringify({
+			data: Base64.stringify(utf8.parse(JSON.stringify(verifyBodyParms))),
+		}),
 	});
 
-	if (data.token === undefined) {
-		return false;
-	}
-
-	let date = await getUnixTime();
-
-	if (date.getUTCMinutes() >= 55 || date.getUTCMinutes() <= 5) {
-		date.setTime(date.getTime() + 3600000);
-	}
-
-	if (MD5(powKey + date.getUTCHours() + this.token).toString() !== data.token) {
+	if (!data.message.includes("SUCN")) {
 		return false;
 	}
 
 	if (this.verify) {
 		createVerificationRutine(license, macAddress, this.failCb);
 	}
+
 	return true;
 }
 
@@ -96,10 +99,28 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const createVerificationRutine = async (lic, macHash, cb) => {
 	while (true) {
-		await sleep(900000);
+		await sleep(20000);
+		//console.log("routine executed");
 		let logged = await loginWithLicense({ license: lic, macAddress: macHash });
 		if (!logged) {
 			cb();
 		}
 	}
 };
+
+/*
+function failCb() {
+	console.log("banned app");
+}
+
+async function validate() {
+	console.log("test started");
+	let unk = UNKCode({ name: "test-program", secretKey: "#+50r7l7m5dsnxmd$br2j$0dcw/x+vh0/392k89d*ix0i$b*9jgrkh5mv+d+8a1$", verifyLicense: true, verificationFail: failCb });
+
+	console.log("Interface created");
+	console.log("login");
+	console.log(await unk.login({ license: "V3M0YN2UVAREKBCPQG6RHKMPKI0RZ6A5", macAddress: "adsasdaadsasdasd" }));
+}
+
+validate();
+*/
