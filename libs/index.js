@@ -50,7 +50,7 @@ async function loginWithLicense({ license, macAddress = undefined }) {
 			data: Base64.stringify(
 				utf8.parse(
 					JSON.stringify({
-						auth: MD5(this.token),
+						auth: MD5(this.token).toString(),
 					})
 				)
 			),
@@ -59,13 +59,9 @@ async function loginWithLicense({ license, macAddress = undefined }) {
 		return false;
 	});
 
-	//console.log(authRes.data);
-
 	if (!authRes.data.message.includes("SUCN")) {
 		return false;
 	}
-
-	//console.log(authRes.data.token);
 
 	let verifyBodyParms = {
 		token: authRes.data.token,
@@ -100,27 +96,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const createVerificationRutine = async (lic, macHash, cb) => {
 	while (true) {
 		await sleep(20000);
-		//console.log("routine executed");
+		console.log("routine executed");
 		let logged = await loginWithLicense({ license: lic, macAddress: macHash });
 		if (!logged) {
 			cb();
 		}
 	}
 };
-
-/*
-function failCb() {
-	console.log("banned app");
-}
-
-async function validate() {
-	console.log("test started");
-	let unk = UNKCode({ name: "test-program", secretKey: "#+50r7l7m5dsnxmd$br2j$0dcw/x+vh0/392k89d*ix0i$b*9jgrkh5mv+d+8a1$", verifyLicense: true, verificationFail: failCb });
-
-	console.log("Interface created");
-	console.log("login");
-	console.log(await unk.login({ license: "V3M0YN2UVAREKBCPQG6RHKMPKI0RZ6A5", macAddress: "adsasdaadsasdasd" }));
-}
-
-validate();
-*/
